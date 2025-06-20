@@ -1,0 +1,23 @@
+# Service to expose the Freezer API.
+{{- if .Values.enabled.api }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "freezer.fullname" . }}-api
+  labels:
+    {{- include "freezer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: {{ .Values.api.type }}
+  ports:
+    - port: {{ .Values.api.port }}
+      targetPort: api
+      protocol: TCP
+      name: api
+      {{- if and (eq .Values.api.type "NodePort") .Values.api.nodePort }}
+      nodePort: {{ .Values.api.nodePort }}
+      {{- end }}
+  selector:
+    {{- include "freezer.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+{{- end }}
