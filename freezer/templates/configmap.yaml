@@ -1,0 +1,52 @@
+# ConfigMap to store Freezer configuration files.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "freezer.fullname" . }}-etc
+  labels:
+    {{- include "freezer.labels" . | nindent 4 }}
+data:
+  freezer.conf: |
+    # Freezer Main Configuration File
+    [DEFAULT]
+    debug = {{ .Values.freezer_conf.DEFAULT.debug | quote }}
+    bind_host = {{ .Values.freezer_conf.DEFAULT.bind_host | quote }}
+    bind_port = {{ .Values.freezer_conf.DEFAULT.bind_port | quote }}
+    auth_version = v3
+    log_file = /var/log/freezer/freezer-api.log
+    log_dir = /var/log/freezer
+    # You can add more DEFAULT options from values.yaml
+
+    [database]
+    connection = mysql+pymysql://{{ .Values.database.user }}:{{ .Values.database.password }}@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}
+    # For PostgreSQL, it would be: postgresql+psycopg2://...
+
+    [keystone_authtoken]
+    www_authenticate_uri = http://{{ .Values.keystone.host }}:{{ .Values.keystone.port }}/v3
+    auth_url = http://{{ .Values.keystone.host }}:{{ .Values.keystone.port }}/v3
+    memcached_servers = {{ .Values.keystone.host }}:11211 # Assuming memcached is co-located or accessible
+    auth_type = password
+    project_domain_name = {{ .Values.serviceUser.domainName }}
+    user_domain_name = {{ .Values.serviceUser.domainName }}
+    project_name = {{ .Values.serviceUser.projectName }}
+    username = {{ .Values.serviceUser.name }}
+    password = {{ .Values.serviceUser.password }}
+    region_name = {{ .Values.keystone.regionName }}
+    interface = public # Or 'internal' depending on your Keystone endpoint setup
+
+    [oslo_messaging_rabbit]
+    rabbit_host = {{ .Values.rabbitmq.host }}
+    rabbit_port = {{ .Values.rabbitmq.port }}
+    rabbit_userid = {{ .Values.rabbitmq.user }}
+    rabbit_password = {{ .Values.rabbitmq.password }}
+    # Other RabbitMQ options like `rabbit_virtual_host`, `rabbit_use_ssl` etc.
+
+    # Example: Add custom sections based on values.yaml
+    {{- range $key, $value := .Values.freezer_conf }}
+    {{- if not (or (eq $key "DEFAULT") (eq $key "database") (eq $key "keystone_authtoken") (eq $key "oslo_messaging_rabbit")) }}
+    [{{ $key }}]
+    {{- range $subKey, $subValue := $value }}
+    {{ $subKey }} = {{ $subValue | quote }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
