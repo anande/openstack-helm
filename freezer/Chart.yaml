@@ -1,0 +1,31 @@
+# Chart.yaml
+# This file provides metadata about the Helm chart.
+apiVersion: v2
+name: freezer
+description: A Helm chart for OpenStack Freezer (Backup and Restore as a Service)
+version: 0.1.0
+appVersion: "1.0.0" # This should ideally match the Freezer version you intend to deploy
+keywords:
+  - openstack
+  - freezer
+  - backup
+  - restore
+  - helm
+home: https://wiki.openstack.org/wiki/Freezer
+sources:
+  - https://opendev.org/openstack/freezer
+  - https://github.com/openstack/freezer
+maintainers:
+  - name: Anand Nande
+    email: anand.nande@gmail.com
+icon: https://wiki.openstack.org/w/images/f/f6/OpenStack_Project_Logo_Freezer.png
+dependencies:
+  # Dependencies for common OpenStack components would go here.
+  # For simplicity, this chart assumes these are already deployed.
+  # For example:
+  # - name: mariadb
+  #   version: "x.y.z"
+  #   repository: "https://charts.bitnami.com/bitnami"
+  # - name: rabbitmq
+  #   version: "x.y.z"
+  #   repository: "https://charts.bitnami.com/bitnami"
