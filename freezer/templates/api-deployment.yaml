@@ -1,0 +1,62 @@
+# Deployment for the Freezer API service.
+{{- if .Values.enabled.api }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "freezer.fullname" . }}-api
+  labels:
+    {{- include "freezer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.replicaCount.api }}
+  selector:
+    matchLabels:
+      {{- include "freezer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "freezer.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: freezer-api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/bin/freezer-api"] # Command to start the Freezer API
+          args: ["--config-file", "/etc/freezer/freezer.conf"]
+          ports:
+            - name: api
+              containerPort: {{ .Values.api.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: freezer-etc
+              mountPath: /etc/freezer/freezer.conf
+              subPath: freezer.conf
+            - name: freezer-log
+              mountPath: /var/log/freezer
+          resources:
+            {{- toYaml .Values.resources.api | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: freezer-etc
+          configMap:
+            name: {{ include "freezer.fullname" . }}-etc
+        - name: freezer-log
+          emptyDir: {} # For ephemeral logs, use persistentVolumeClaim for production
+{{- end }}
