@@ -1,0 +1,104 @@
+# Kubernetes Job to perform initial database migrations and service user/endpoint registration.
+# This job runs once during the initial deployment or upgrade.
+{{- if .Values.enabled.bootstrap }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "freezer.fullname" . }}-bootstrap
+  labels:
+    {{- include "freezer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bootstrap
+  annotations:
+    # This annotation ensures the job only runs once successfully
+    # You might need a more sophisticated helm hook for real-world scenarios (e.g., helm.sh/hook: post-install,post-upgrade)
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "freezer.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: freezer-bootstrap
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/bash"]
+          args:
+            - "-c"
+            - |
+              # Wait for database and Keystone to be ready (simplified)
+              echo "Waiting for database and Keystone..."
+              # You should use more robust health checks here, e.g., checking TCP ports
+              sleep 10
+
+              echo "Running Freezer DB migration..."
+              freezer-manage db sync --config-file /etc/freezer/freezer.conf
+
+              echo "Registering Freezer service and endpoints with Keystone..."
+              # This part assumes you have a way to interact with Keystone (e.g., openstack client in the container)
+              # and an admin token or credentials.
+              # In a real scenario, this container would need environment variables or a specific entrypoint
+              # for Keystone authentication. This is highly simplified.
+
+              export OS_AUTH_URL="http://{{ .Values.keystone.host }}:{{ .Values.keystone.port }}/v3"
+              export OS_PROJECT_DOMAIN_NAME="{{ .Values.serviceUser.domainName }}"
+              export OS_USER_DOMAIN_NAME="{{ .Values.serviceUser.domainName }}"
+              export OS_PROJECT_NAME="{{ .Values.keystone.adminProject }}" # Admin project for initial setup
+              export OS_USERNAME="{{ .Values.keystone.adminUser }}"
+              export OS_PASSWORD="{{ .Values.keystone.adminPassword }}"
+              export OS_REGION_NAME="{{ .Values.keystone.regionName }}"
+
+              # Create Freezer service if it doesn't exist
+              openstack service show freezer || \
+              openstack service create --name freezer --description "Freezer Backup and Restore Service" backup
+
+              # Create Freezer API endpoints if they don't exist
+              # Public Endpoint
+              openstack endpoint show freezer public || \
+              openstack endpoint create \
+                --region {{ .Values.keystone.regionName }} \
+                freezer public "http://{{ include "freezer.fullname" . }}-api:{{ .Values.api.port }}"
+
+              # Internal Endpoint (often same as public for simple setups, or a dedicated internal FQDN)
+              openstack endpoint show freezer internal || \
+              openstack endpoint create \
+                --region {{ .Values.keystone.regionName }} \
+                freezer internal "http://{{ include "freezer.fullname" . }}-api:{{ .Values.api.port }}"
+
+              # Admin Endpoint (often same as public for simple setups, or a dedicated admin FQDN)
+              openstack endpoint show freezer admin || \
+              openstack endpoint create \
+                --region {{ .Values.keystone.regionName }} \
+                freezer admin "http://{{ include "freezer.fullname" . }}-api:{{ .Values.api.port }}"
+
+              # Create service user and assign roles
+              openstack user show {{ .Values.serviceUser.name }} || \
+              openstack user create \
+                --domain {{ .Values.serviceUser.domainName }} \
+                --password-prompt \
+                --enable \
+                {{ .Values.serviceUser.name }}
+
+              # Assign admin role to service user in the service project
+              openstack role add \
+                --project {{ .Values.serviceUser.projectName }} \
+                --user {{ .Values.serviceUser.name }} \
+                admin
+
+              echo "Freezer bootstrap complete."
+
+          volumeMounts:
+            - name: freezer-etc
+              mountPath: /etc/freezer/freezer.conf
+              subPath: freezer.conf
+          envFrom:
+            - secretRef:
+                name: {{ include "freezer.fullname" . }}-secrets # Mount secrets as environment variables
+      volumes:
+        - name: freezer-etc
+          configMap:
+            name: {{ include "freezer.fullname" . }}-etc
+{{- end }}
