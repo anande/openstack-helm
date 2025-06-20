@@ -1,0 +1,87 @@
+# values.yaml
+# Default values for the freezer chart.
+# This is where you configure various aspects of your Freezer deployment.
+#
+# IMPORTANT SECURITY WARNING:
+# NEVER put sensitive production passwords directly in values.yaml.
+# For production deployments, use a secure secret management solution
+# like Sealed Secrets, HashiCorp Vault, or Kubernetes Secrets generated
+# by an external tool. This example uses plain values for simplicity only.
+#
+image:
+  repository: quay.io/openstackhelm/freezer
+  tag: latest # Or a specific OpenStack release tag (e.g., "rocky", "train", "yoga")
+  pullPolicy: IfNotPresent
+
+replicaCount:
+  api: 1
+  worker: 1
+
+database:
+  type: mysql # or postgresql
+  host: mariadb.openstack.svc.cluster.local # Replace with your database host
+  port: 3306 # Replace with your database port
+  name: freezer # Database name for Freezer
+  user: freezer
+  password: supersecret_db_password # !!!!!!!!! WARNING !!!!!!!!!
+
+rabbitmq:
+  host: rabbitmq.openstack.svc.cluster.local # Replace with your RabbitMQ host
+  port: 5672
+  user: openstack
+  password: supersecret_rabbitmq_password # !!!!!!!!! WARNING !!!!!!!!!
+
+keystone:
+  host: keystone.openstack.svc.cluster.local # Replace with your Keystone host
+  port: 5000
+  adminUser: admin
+  adminPassword: supersecret_keystone_admin_password # !!!!!!!!! WARNING !!!!!!!!!
+  regionName: RegionOne # Or your OpenStack region name
+
+# OpenStack service user details for Freezer to interact with Keystone
+serviceUser:
+  name: freezer
+  password: supersecret_freezer_service_password # !!!!!!!!! WARNING !!!!!!!!!
+  projectName: service # Or the project your OpenStack service users reside in
+  domainName: Default
+
+# API service configuration
+api:
+  port: 8000 # Default Freezer API port
+  nodePort: null # Set to a port like 3xxxx if you need NodePort external access
+  type: ClusterIP # Can be ClusterIP, NodePort, or LoadBalancer
+
+# Worker service configuration (Freezer workers typically don't expose ports)
+worker:
+  # Additional worker specific configurations can go here, like resource limits
+
+# Resources (CPU/Memory limits and requests) for API and Worker pods
+resources:
+  api:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  worker:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+# Enable/Disable various components
+enabled:
+  api: true
+  worker: true
+  bootstrap: true # For database setup (migrations, user creation)
+
+# Additional configuration for freezer.conf
+freezer_conf:
+  DEFAULT:
+    bind_host: 0.0.0.0
+    bind_port: 8000
+    debug: false
+  # Add more sections and key-value pairs as needed for your Freezer configuration
