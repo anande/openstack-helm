@@ -1,0 +1,44 @@
+# Deployment for the Freezer Worker service.
+{{- if .Values.enabled.worker }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "freezer.fullname" . }}-worker
+  labels:
+    {{- include "freezer.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.replicaCount.worker }}
+  selector:
+    matchLabels:
+      {{- include "freezer.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "freezer.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: freezer-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/bin/freezer-worker"] # Command to start the Freezer Worker
+          args: ["--config-file", "/etc/freezer/freezer.conf"]
+          volumeMounts:
+            - name: freezer-etc
+              mountPath: /etc/freezer/freezer.conf
+              subPath: freezer.conf
+            - name: freezer-log
+              mountPath: /var/log/freezer
+          resources:
+            {{- toYaml .Values.resources.worker | nindent 12 }}
+          # Workers typically don't have HTTP endpoints, so liveness/readiness probes might be different
+          # For a worker, you might use 'exec' probes to check process health.
+      volumes:
+        - name: freezer-etc
+          configMap:
+            name: {{ include "freezer.fullname" . }}-etc
+        - name: freezer-log
+          emptyDir: {}
+{{- end }}
