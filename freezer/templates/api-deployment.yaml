@@ -1,62 +1,80 @@
-# Deployment for the Freezer API service.
-{{- if .Values.enabled.api }}
+{{- if .Values.freezerApi.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "freezer.fullname" . }}-api
+  name: {{ include "openstack-freezer.fullname" . }}-api
   labels:
-    {{- include "freezer.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api
+    {{- include "openstack-freezer.labels" . | nindent 4 }}
+    component: api
 spec:
-  replicas: {{ .Values.replicaCount.api }}
+  replicas: {{ .Values.freezerApi.replicaCount }}
   selector:
     matchLabels:
-      {{- include "freezer.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: api
+      {{- include "openstack-freezer.selectorLabels" . | nindent 6 }}
+      component: api
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.freezerApi.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
-        {{- include "freezer.labels" . | nindent 8 }}
-        app.kubernetes.io/component: api
+        {{- include "openstack-freezer.selectorLabels" . | nindent 8 }}
+        component: api
     spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "openstack-freezer.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.freezerApi.podSecurityContext | nindent 8 }}
       containers:
         - name: freezer-api
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["/usr/bin/freezer-api"] # Command to start the Freezer API
-          args: ["--config-file", "/etc/freezer/freezer.conf"]
+          securityContext:
+            {{- toYaml .Values.freezerApi.securityContext | nindent 12 }}
+          image: "{{ .Values.global.imageRegistry }}{{ .Values.freezerApi.image.repository }}:{{ .Values.freezerApi.image.tag }}"
+          imagePullPolicy: {{ .Values.freezerApi.image.pullPolicy }}
           ports:
-            - name: api
-              containerPort: {{ .Values.api.port }}
+            - name: http
+              containerPort: 9090
               protocol: TCP
-          volumeMounts:
-            - name: freezer-etc
-              mountPath: /etc/freezer/freezer.conf
-              subPath: freezer.conf
-            - name: freezer-log
-              mountPath: /var/log/freezer
-          resources:
-            {{- toYaml .Values.resources.api | nindent 12 }}
           livenessProbe:
             httpGet:
-              path: /
-              port: {{ .Values.api.port }}
+              path: /v2
+              port: http
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
           readinessProbe:
             httpGet:
-              path: /
-              port: {{ .Values.api.port }}
+              path: /v2
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.freezerApi.resources | nindent 12 }}
+          env:
+            - name: FREEZER_API_CONFIG_FILE
+              value: /etc/freezer/freezer-api.conf
+          volumeMounts:
+            - name: config
+              mountPath: /etc/freezer
+              readOnly: true
       volumes:
-        - name: freezer-etc
+        - name: config
           configMap:
-            name: {{ include "freezer.fullname" . }}-etc
-        - name: freezer-log
-          emptyDir: {} # For ephemeral logs, use persistentVolumeClaim for production
+            name: {{ include "openstack-freezer.fullname" . }}-config
+      {{- with .Values.freezerApi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.freezerApi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.freezerApi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- end }}
