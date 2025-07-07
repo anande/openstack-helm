@@ -1,0 +1,42 @@
+{{- if and .Values.freezerApi.enabled .Values.freezerApi.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "openstack-freezer.fullname" . }}-api
+  labels:
+    {{- include "openstack-freezer.labels" . | nindent 4 }}
+    component: api
+  {{- with .Values.freezerApi.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.freezerApi.ingress.className }}
+  ingressClassName: {{ .Values.freezerApi.ingress.className }}
+  {{- end }}
+  {{- if .Values.freezerApi.ingress.tls }}
+  tls:
+    {{- range .Values.freezerApi.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.freezerApi.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "openstack-freezer.fullname" $ }}-api
+                port:
+                  number: {{ $.Values.freezerApi.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
