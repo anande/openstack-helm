@@ -1,0 +1,64 @@
+{{- if .Values.freezerScheduler.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openstack-freezer.fullname" . }}-scheduler
+  labels:
+    {{- include "openstack-freezer.labels" . | nindent 4 }}
+    component: scheduler
+spec:
+  replicas: {{ .Values.freezerScheduler.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openstack-freezer.selectorLabels" . | nindent 6 }}
+      component: scheduler
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.freezerScheduler.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "openstack-freezer.selectorLabels" . | nindent 8 }}
+        component: scheduler
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "openstack-freezer.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.freezerScheduler.podSecurityContext | nindent 8 }}
+      containers:
+        - name: freezer-scheduler
+          securityContext:
+            {{- toYaml .Values.freezerScheduler.securityContext | nindent 12 }}
+          image: "{{ .Values.global.imageRegistry }}{{ .Values.freezerScheduler.image.repository }}:{{ .Values.freezerScheduler.image.tag }}"
+          imagePullPolicy: {{ .Values.freezerScheduler.image.pullPolicy }}
+          command:
+            - freezer-scheduler
+            - --config-file=/etc/freezer/freezer-scheduler.conf
+          resources:
+            {{- toYaml .Values.freezerScheduler.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/freezer
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "openstack-freezer.fullname" . }}-config
+      {{- with .Values.freezerScheduler.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.freezerScheduler.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.freezerScheduler.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
