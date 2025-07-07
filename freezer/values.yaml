@@ -1,87 +1,135 @@
-# values.yaml
-# Default values for the freezer chart.
-# This is where you configure various aspects of your Freezer deployment.
-#
-# IMPORTANT SECURITY WARNING:
-# NEVER put sensitive production passwords directly in values.yaml.
-# For production deployments, use a secure secret management solution
-# like Sealed Secrets, HashiCorp Vault, or Kubernetes Secrets generated
-# by an external tool. This example uses plain values for simplicity only.
-#
-image:
-  repository: quay.io/openstackhelm/freezer
-  tag: latest # Or a specific OpenStack release tag (e.g., "rocky", "train", "yoga")
-  pullPolicy: IfNotPresent
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
 
-replicaCount:
-  api: 1
-  worker: 1
+nameOverride: ""
+fullnameOverride: ""
 
-database:
-  type: mysql # or postgresql
-  host: mariadb.openstack.svc.cluster.local # Replace with your database host
-  port: 3306 # Replace with your database port
-  name: freezer # Database name for Freezer
-  user: freezer
-  password: supersecret_db_password # !!!!!!!!! WARNING !!!!!!!!!
-
-rabbitmq:
-  host: rabbitmq.openstack.svc.cluster.local # Replace with your RabbitMQ host
-  port: 5672
-  user: openstack
-  password: supersecret_rabbitmq_password # !!!!!!!!! WARNING !!!!!!!!!
-
-keystone:
-  host: keystone.openstack.svc.cluster.local # Replace with your Keystone host
-  port: 5000
-  adminUser: admin
-  adminPassword: supersecret_keystone_admin_password # !!!!!!!!! WARNING !!!!!!!!!
-  regionName: RegionOne # Or your OpenStack region name
-
-# OpenStack service user details for Freezer to interact with Keystone
-serviceUser:
-  name: freezer
-  password: supersecret_freezer_service_password # !!!!!!!!! WARNING !!!!!!!!!
-  projectName: service # Or the project your OpenStack service users reside in
-  domainName: Default
-
-# API service configuration
-api:
-  port: 8000 # Default Freezer API port
-  nodePort: null # Set to a port like 3xxxx if you need NodePort external access
-  type: ClusterIP # Can be ClusterIP, NodePort, or LoadBalancer
-
-# Worker service configuration (Freezer workers typically don't expose ports)
-worker:
-  # Additional worker specific configurations can go here, like resource limits
-
-# Resources (CPU/Memory limits and requests) for API and Worker pods
-resources:
-  api:
+# Freezer API Configuration
+freezerApi:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airshipit/freezer-api
+    tag: "2025.1-ubuntu_jammy"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+  
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: freezer-api.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  
+  resources:
     limits:
       cpu: 500m
       memory: 512Mi
     requests:
       cpu: 250m
       memory: 256Mi
-  worker:
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+
+# Freezer Scheduler Configuration
+freezerScheduler:
+  enabled: true
+  replicaCount: 1
+  
+  image:
+    repository: airshipit/freezer
+    tag: "2025.1-ubuntu_jammy"
+    pullPolicy: IfNotPresent
+  
+  resources:
     limits:
-      cpu: 1000m
-      memory: 1Gi
+      cpu: 200m
+      memory: 256Mi
     requests:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 100m
+      memory: 128Mi
+  
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
 
-# Enable/Disable various components
-enabled:
-  api: true
-  worker: true
-  bootstrap: true # For database setup (migrations, user creation)
+# Database Configuration
+database:
+  # Use external database
+  external: true
+  host: "mariadb.openstack.svc.cluster.local"
+  port: 3306
+  name: "freezer"
+  username: "freezer"
+  # Password should be provided via secret
+  existingSecret: "freezer-db-secret"
+  secretKey: "password"
 
-# Additional configuration for freezer.conf
-freezer_conf:
-  DEFAULT:
-    bind_host: 0.0.0.0
-    bind_port: 8000
-    debug: false
-  # Add more sections and key-value pairs as needed for your Freezer configuration
+# Keystone Configuration
+keystone:
+  authUrl: "http://keystone.openstack.svc.cluster.local:5000/v3"
+  region: "RegionOne"
+  # Service credentials
+  service:
+    username: "freezer"
+    password: ""
+    projectName: "service"
+    projectDomainName: "Default"
+    userDomainName: "Default"
+    existingSecret: "freezer-keystone-secret"
+    secretKey: "password"
+
+# Message Queue Configuration (RabbitMQ)
+messaging:
+  host: "rabbitmq.openstack.svc.cluster.local"
+  port: 5672
+  username: "freezer"
+  vhost: "/"
+  existingSecret: "freezer-rabbitmq-secret"
+  secretKey: "password"
+
+# Storage Configuration
+storage:
+  # Default storage driver
+  driver: "swift"
+  
+  # Swift configuration
+  swift:
+    authUrl: "http://keystone.openstack.svc.cluster.local:5000/v3"
+    username: "freezer"
+    password: ""
+    projectName: "service"
+    projectDomainName: "Default"
+    userDomainName: "Default"
+    container: "freezer_backups"
+    existingSecret: "freezer-swift-secret"
+    secretKey: "password"
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# ConfigMaps and Secrets will be created by templates
