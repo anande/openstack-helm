@@ -1,0 +1,116 @@
+1. Get the application URL by running these commands:
+{{- if .Values.freezerApi.ingress.enabled }}
+{{- range $host := .Values.freezerApi.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.freezerApi.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.freezerApi.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "openstack-freezer.fullname" . }}-api)
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.freezerApi.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "openstack-freezer.fullname" . }}-api'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "openstack-freezer.fullname" . }}-api --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.freezerApi.service.port }}
+{{- else if contains "ClusterIP" .Values.freezerApi.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "openstack-freezer.name" . }},app.kubernetes.io/instance={{ .Release.Name }},component=api" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:9090 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 9090:$CONTAINER_PORT
+{{- end }}
+
+2. Freezer API is now running. To create your first backup job, you can use the freezer CLI or API calls.
+
+3. Make sure you have configured the required secrets:
+   - {{ .Values.database.existingSecret }} (for database password)
+   - {{ .Values.keystone.service.existingSecret }} (for Keystone service password)
+   - {{ .Values.messaging.existingSecret }} (for RabbitMQ password)
+   - {{ .Values.storage.swift.existingSecret }} (for Swift storage password)
+
+---
+# README.md
+# OpenStack Freezer Helm Chart
+
+This Helm chart deploys OpenStack Freezer (Backup as a Service) on Kubernetes.
+
+## Prerequisites
+
+- Kubernetes 1.19+
+- Helm 3.2.0+
+- A running OpenStack deployment with:
+  - Keystone (Identity Service)
+  - Swift (Object Storage) or other supported storage backend
+  - MariaDB/MySQL database
+  - RabbitMQ message broker
+
+## Installation
+
+1. Create the required secrets:
+
+```bash
+# Database password
+kubectl create secret generic freezer-db-secret \
+  --from-literal=password=your-db-password
+
+# Keystone service password
+kubectl create secret generic freezer-keystone-secret \
+  --from-literal=password=your-keystone-password
+
+# RabbitMQ password
+kubectl create secret generic freezer-rabbitmq-secret \
+  --from-literal=password=your-rabbitmq-password
+
+# Swift storage password
+kubectl create secret generic freezer-swift-secret \
+  --from-literal=password=your-swift-password
+```
+
+2. Install the chart:
+
+```bash
+helm install freezer ./openstack-freezer
+```
+
+## Configuration
+
+The following table lists the configurable parameters and their default values:
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `freezerApi.enabled` | Enable Freezer API deployment | `true` |
+| `freezerApi.replicaCount` | Number of API replicas | `1` |
+| `freezerScheduler.enabled` | Enable Freezer Scheduler deployment | `true` |
+| `database.host` | Database hostname | `mariadb.openstack.svc.cluster.local` |
+| `database.name` | Database name | `freezer` |
+| `keystone.authUrl` | Keystone authentication URL | `http://keystone.openstack.svc.cluster.local:5000/v3` |
+| `messaging.host` | RabbitMQ hostname | `rabbitmq.openstack.svc.cluster.local` |
+| `storage.driver` | Storage backend driver | `swift` |
+
+## Components
+
+This chart deploys the following components:
+
+- **Freezer API**: REST API service for backup management
+- **Freezer Scheduler**: Background service for scheduled backup jobs
+
+## Storage Backends
+
+Currently supports Swift object storage. Additional backends can be configured by modifying the storage configuration in values.yaml.
+
+## Upgrading
+
+To upgrade the deployment:
+
+```bash
+helm upgrade freezer ./openstack-freezer
+```
+
+## Uninstalling
+
+To uninstall the deployment:
+
+```bash
+helm uninstall freezer
+```
